@@ -48,17 +48,21 @@ print_status "Pulling latest changes from git..."
 # Make sure we're on the right remote
 git remote set-url origin https://github.com/Yerassyl20036/hacknu_mytravel.git
 
-# Check which branch has the actual code and switch to it
-if git ls-remote --heads origin master | grep -q "master"; then
-    print_status "Found master branch, switching to master..."
-    git fetch origin
+# Fetch latest changes
+git fetch origin
+
+# Check if main branch exists and has content, otherwise use master
+if git ls-remote --heads origin main | grep -q "main"; then
+    print_status "Using main branch..."
+    git checkout main 2>/dev/null || git checkout -b main origin/main
+    git pull origin main --allow-unrelated-histories
+elif git ls-remote --heads origin master | grep -q "master"; then
+    print_status "Using master branch..."
     git checkout master 2>/dev/null || git checkout -b master origin/master
     git pull origin master --allow-unrelated-histories
 else
-    print_status "Using main branch..."
-    git fetch origin
-    git checkout main 2>/dev/null || git checkout -b main origin/main  
-    git pull origin main --allow-unrelated-histories
+    print_error "No valid branch found on remote!"
+    exit 1
 fi
 
 print_status "Stopping existing containers..."

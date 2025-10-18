@@ -4,16 +4,15 @@ FROM golang:1.21-alpine AS builder
 WORKDIR /app
 
 # Copy go mod files
-COPY ../../go.mod ../../go.sum ./
+COPY go.mod go.sum ./
 
 # Download dependencies
 RUN go mod download
 
-# Copy the entire project (for shared internal packages)
-COPY ../.. .
+# Copy source code
+COPY . .
 
 # Build the application
-WORKDIR /app/apps/yandex_parser
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
 
 # Final stage
