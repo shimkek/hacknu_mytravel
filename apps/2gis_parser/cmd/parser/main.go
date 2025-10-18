@@ -74,8 +74,12 @@ func main() {
 		return
 	}
 
-	if err := parser.Run(); err != nil {
-		l.Fatal("failed to run parser: %v", err)
+	for {
+		if err := parser.Run(); err != nil {
+			l.Fatal("failed to run parser: %v", err)
+		}
+		l.Info("Parser run completed, sleeping for 1 hour before next run")
+		time.Sleep(1 * time.Hour)
 	}
 }
 
