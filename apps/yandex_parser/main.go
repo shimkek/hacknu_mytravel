@@ -19,7 +19,7 @@ func main() {
 
 	// Get database config from environment
 	dbHost := getEnv("DB_HOST", "localhost")
-	dbPort := getEnv("DB_PORT", "5433")
+	dbPort := getEnv("DB_PORT", "5434")
 	dbUser := getEnv("DB_USER", "postgres")
 	dbPassword := getEnv("DB_PASSWORD", "postgres")
 	dbName := getEnv("DB_NAME", "mytravel_db")
