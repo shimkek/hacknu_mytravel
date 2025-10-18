@@ -1,0 +1,9 @@
+ID,Alias,Name,Kind,ParentID,ShortID,Count
+547,bazy_otdykha,Базы отдыха,primary,8,547,314
+269,gostinicy,Гостиницы,primary,8,269,217
+23469,arenda_kottedzhejj,Аренда коттеджей,primary,8,23469,33
+52681,khostely,Хостелы,primary,8,52681,24
+214,sanatorii,Санатории,primary,5,214,10
+110305,arenda_besedok,Аренда беседок,additional,2,110305,4
+110329,nacionalnye_zhilishha,Национальные жилища,primary,9,110329,1
+70348,kempingi,Кемпинги,primary,8,70348,0

@@ -1,7 +1,10 @@
 package logger
 
 import (
+	"time"
+
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 type Logger struct {
@@ -9,14 +12,36 @@ type Logger struct {
 }
 
 func New(env string) *Logger {
-	var l *zap.Logger
-	var err error
+	var config zap.Config
 
 	if env == "production" {
-		l, err = zap.NewProduction()
+		config = zap.NewProductionConfig()
 	} else {
-		l, err = zap.NewDevelopment()
+		config = zap.NewDevelopmentConfig()
+		// Configure prettier console output for development
+		config.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+		config.EncoderConfig = zapcore.EncoderConfig{
+			TimeKey:       "time",
+			LevelKey:      "level",
+			NameKey:       "logger",
+			CallerKey:     "caller",
+			FunctionKey:   zapcore.OmitKey,
+			MessageKey:    "msg",
+			StacktraceKey: "stacktrace",
+			LineEnding:    zapcore.DefaultLineEnding,
+			EncodeLevel:   zapcore.CapitalColorLevelEncoder, // Colorized level names
+			EncodeTime: func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
+				enc.AppendString(t.Format("15:04:05")) // Pretty time format HH:MM:SS
+			},
+			EncodeDuration: zapcore.StringDurationEncoder,
+			EncodeCaller:   zapcore.ShortCallerEncoder,
+		}
+		config.Encoding = "console"
+		config.Development = true
+		config.DisableStacktrace = true
 	}
+
+	l, err := config.Build()
 	if err != nil {
 		panic(err)
 	}
