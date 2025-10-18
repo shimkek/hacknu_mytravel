@@ -5,6 +5,7 @@ import (
 	"2gis-parser/internal/domain"
 	"2gis-parser/internal/store"
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -144,7 +145,7 @@ func (p *Parser) RunSingleBusiness(businessID string) error {
 	}
 
 	p.logger.Info("Successfully fetched business: %s", business.Name)
-
+	log.Printf("Business Details: %+v\n", business)
 	if err := p.store.InsertBusinessDetail(business); err != nil {
 		return fmt.Errorf("failed to insert business detail: %w", err)
 	}

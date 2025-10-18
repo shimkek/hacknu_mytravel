@@ -88,7 +88,7 @@ func (ps *PostgresStore) InsertBusinessDetail(business domain.BusinessDetail) er
 	// Validate JSON data before insertion
 	if err := ps.validateJSONFields(accommodation); err != nil {
 		ps.logger.Error("Invalid JSON data for business %s: %v", business.ID, err)
-		ps.logBusinessInsertion("2gis", "failed", fmt.Sprintf("Invalid JSON data: %v", err), startTime)
+		ps.logBusinessInsertion("2gis", business.ID, "insert", "failed", fmt.Sprintf("Invalid JSON data: %v", err), startTime)
 		return fmt.Errorf("invalid JSON data: %w", err)
 	}
 
@@ -130,9 +130,11 @@ func (ps *PostgresStore) InsertBusinessDetail(business domain.BusinessDetail) er
 			amenities = EXCLUDED.amenities,
 			verification_status = EXCLUDED.verification_status,
 			last_updated = CURRENT_TIMESTAMP
+		RETURNING (xmax = 0) AS was_insert
 	`
 
-	_, err := ps.db.Exec(query,
+	var wasInsert bool
+	err := ps.db.QueryRow(query,
 		accommodation.Name,
 		accommodation.Latitude,
 		accommodation.Longitude,
@@ -157,16 +159,22 @@ func (ps *PostgresStore) InsertBusinessDetail(business domain.BusinessDetail) er
 		accommodation.SourceWebsite,
 		accommodation.SourceURL,
 		accommodation.ExternalID,
-	)
+	).Scan(&wasInsert)
 
 	if err != nil {
-		ps.logger.Error("Failed to insert business detail %s: %v", business.ID, err)
-		ps.logBusinessInsertion("2gis", "failed", fmt.Sprintf("Database error: %v", err), startTime)
-		return fmt.Errorf("failed to insert business detail: %w", err)
+		ps.logger.Error("Failed to insert/update business detail %s: %v", business.ID, err)
+		operation := "insert" // Default to insert for error logging
+		ps.logBusinessInsertion("2gis", business.ID, operation, "failed", fmt.Sprintf("Database error: %v", err), startTime)
+		return fmt.Errorf("failed to insert/update business detail: %w", err)
 	}
 
-	ps.logger.Info("Successfully inserted/updated accommodation: %s (ID: %s)", business.Name, business.ID)
-	ps.logBusinessInsertion("2gis", "success", "", startTime)
+	operation := "update"
+	if wasInsert {
+		operation = "insert"
+	}
+
+	ps.logger.Info("Successfully %sed accommodation: %s (ID: %s)", operation, business.Name, business.ID)
+	ps.logBusinessInsertion("2gis", business.ID, operation, "success", "", startTime)
 	return nil
 }
 
@@ -302,9 +310,9 @@ func (ps *PostgresStore) InsertBusinessDetailsWithBatching(businesses []domain.B
 }
 
 // logBusinessInsertion logs individual business insertion operations
-func (ps *PostgresStore) logBusinessInsertion(sourceWebsite, status, errorMessage string, startTime time.Time) {
+func (ps *PostgresStore) logBusinessInsertion(sourceWebsite, externalID, operation, status, errorMessage string, startTime time.Time) {
 	completedAt := time.Now()
-	duration := int(completedAt.Sub(startTime).Seconds())
+	duration := int(completedAt.Sub(startTime).Milliseconds()) // Changed to milliseconds to match schema
 
 	var errMsg *string
 	if errorMessage != "" {
@@ -313,21 +321,23 @@ func (ps *PostgresStore) logBusinessInsertion(sourceWebsite, status, errorMessag
 
 	query := `
 		INSERT INTO parsing_logs (
-			source_website, status, error_message, started_at, completed_at, duration_seconds
-		) VALUES ($1, $2, $3, $4, $5, $6)
+			source_website, operation, status, error_message, started_at, completed_at, duration_ms, external_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 
 	_, err := ps.db.Exec(query,
 		sourceWebsite,
+		operation,
 		status,
 		errMsg,
 		startTime,
 		completedAt,
 		duration,
+		externalID,
 	)
 
 	if err != nil {
-		ps.logger.Error("Failed to log business insertion: %v", err)
+		ps.logger.Error("Failed to log business %s: %v", operation, err)
 	}
 }
 
