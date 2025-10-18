@@ -1,4 +1,3 @@
-package googlemapsparser
 package main
 
 import (
@@ -8,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	_ "github.com/lib/pq"
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
 func main() {

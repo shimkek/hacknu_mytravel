@@ -1,16 +1,14 @@
-package yandexparser
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
 	"time"
 
-	"mytravel/internal/database"
-	"mytravel/internal/models"
-
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -19,27 +17,41 @@ func main() {
 		log.Printf("Warning: .env file not found: %v", err)
 	}
 
-	// Initialize database connection
-	config := database.LoadConfig()
-	db, err := database.Connect(config)
+	// Get database config from environment
+	dbHost := getEnv("DB_HOST", "localhost")
+	dbPort := getEnv("DB_PORT", "5433")
+	dbUser := getEnv("DB_USER", "postgres")
+	dbPassword := getEnv("DB_PASSWORD", "postgres")
+	dbName := getEnv("DB_NAME", "mytravel_db")
+
+	// Connect to database
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		dbHost, dbPort, dbUser, dbPassword, dbName)
+
+	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer db.Close()
 
-	log.Println("Yandex Parser started")
+	// Test connection
+	if err := db.Ping(); err != nil {
+		log.Fatalf("Failed to ping database: %v", err)
+	}
 
-	// Simple counter that runs every 35 seconds
+	log.Println("Yandex Parser started successfully")
+
+	// Simple counter that runs every 40 seconds
 	counter := 0
 	for {
 		counter++
 		log.Printf("Yandex Parser iteration #%d", counter)
 
-		// Create a simple parsing log entry
+		// Log parsing activity
 		_, err := db.Exec(`
 			INSERT INTO parsing_logs (source_website, status, records_processed, started_at) 
 			VALUES ($1, $2, $3, $4)`,
-			models.SourceWebsiteYandex, "completed", counter, time.Now())
+			"yandex", "completed", counter, time.Now())
 
 		if err != nil {
 			log.Printf("Error inserting parsing log: %v", err)
@@ -47,16 +59,16 @@ func main() {
 			log.Printf("Successfully logged parsing iteration #%d", counter)
 		}
 
-		// Simple accommodation entry (for testing)
-		if counter%7 == 0 { // Every 7th iteration, add a test accommodation
+		// Add test accommodation every 3rd iteration
+		if counter%3 == 0 {
 			_, err := db.Exec(`
-				INSERT INTO accommodations (name, description, source_website, external_id, verification_status, created_at) 
+				INSERT INTO accommodations (name, service_description, source_website, external_id, verification_status, created_at) 
 				VALUES ($1, $2, $3, $4, $5, $6)`,
-				fmt.Sprintf("Yandex Maps Location #%d", counter),
-				fmt.Sprintf("An accommodation found via Yandex Maps, iteration %d", counter),
-				models.SourceWebsiteYandex,
+				fmt.Sprintf("Yandex Отель #%d", counter),
+				fmt.Sprintf("Тестовый отель найденный парсером Yandex на итерации %d", counter),
+				"yandex",
 				fmt.Sprintf("yandex_%d", counter),
-				models.VerificationStatusNew,
+				"new",
 				time.Now())
 
 			if err != nil {
@@ -66,6 +78,13 @@ func main() {
 			}
 		}
 
-		time.Sleep(35 * time.Second)
+		time.Sleep(40 * time.Second)
 	}
+}
+
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }
