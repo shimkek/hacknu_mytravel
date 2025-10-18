@@ -19,13 +19,32 @@ git clone https://github.com/Yerassyl20036/hacknu_mytravel.git
 cd hacknu_mytravel
 ```
 
-### 2. Deploy/Update (run anytime)
+### 2. Fix Repository Issues (if needed)
+
+If you get "divergent branches" error, it means there are conflicts between master and main branches.
+
+**On your local machine:**
+```bash
+# Fix the repository structure
+./fix-repo.sh
+```
+
+**On VPS if you get branch errors:**
+```bash
+# Delete the directory and clone fresh
+rm -rf hacknu_mytravel
+git clone https://github.com/Yerassyl20036/hacknu_mytravel.git
+cd hacknu_mytravel
+```
+
+### 3. Deploy/Update (run anytime)
 ```bash
 # Simple one-command deployment
 ./deploy.sh
 ```
 
 This script will:
+- Automatically detect and switch to the correct branch (master or main)
 - Pull latest changes from GitHub
 - Stop old containers
 - Build new containers locally
