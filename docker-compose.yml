@@ -12,7 +12,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./infrastructure/database/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
-      - "5434:5434"  # Custom port to avoid conflicts
+      - "5434:5432"  # Custom port to avoid conflicts
     networks:
       - mytravel_network
     restart: unless-stopped
@@ -29,7 +29,7 @@ services:
       dockerfile: Dockerfile
     environment:
       DB_HOST: postgres
-      DB_PORT: 5434
+      DB_PORT: 5432
       DB_USER: postgres
       DB_PASSWORD: postgres
       DB_NAME: mytravel_db
@@ -48,7 +48,7 @@ services:
       dockerfile: Dockerfile
     environment:
       DB_HOST: postgres
-      DB_PORT: 5434
+      DB_PORT: 5432
       DB_USER: postgres
       DB_PASSWORD: postgres
       DB_NAME: mytravel_db
@@ -67,7 +67,7 @@ services:
       dockerfile: Dockerfile
     environment:
       DB_HOST: postgres
-      DB_PORT: 5434
+      DB_PORT: 5432
       DB_USER: postgres
       DB_PASSWORD: postgres
       DB_NAME: mytravel_db
@@ -86,7 +86,7 @@ services:
       dockerfile: Dockerfile
     environment:
       DB_HOST: postgres
-      DB_PORT: 5434
+      DB_PORT: 5432
       DB_USER: postgres
       DB_PASSWORD: postgres
       DB_NAME: mytravel_db
@@ -105,7 +105,7 @@ services:
       dockerfile: Dockerfile
     environment:
       DB_HOST: postgres
-      DB_PORT: 5434
+      DB_PORT: 5432
       DB_USER: postgres
       DB_PASSWORD: postgres
       DB_NAME: mytravel_db
