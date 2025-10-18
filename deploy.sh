@@ -76,6 +76,12 @@ elif netstat -tln | grep -q ":5433"; then
     print_warning "If this is your existing PostgreSQL, the deployment will use port 5433"
 fi
 
+print_status "Preparing Go modules..."
+if [ -f "./generate-go-sum.sh" ]; then
+    chmod +x ./generate-go-sum.sh
+    ./generate-go-sum.sh
+fi
+
 print_status "Building and starting all services..."
 docker-compose up --build -d
 
