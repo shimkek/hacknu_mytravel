@@ -1,0 +1,125 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database (using custom port 5433 to avoid conflicts with existing PostgreSQL)
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: mytravel_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5433:5432"  # Custom port to avoid conflicts
+    networks:
+      - mytravel_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # 2GIS Parser
+  parser_2gis:
+    build:
+      context: ./apps/2gis_parser
+      dockerfile: Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: mytravel_db
+      DB_SSLMODE: disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mytravel_network
+    restart: unless-stopped
+
+  # Google Maps Parser
+  parser_google_maps:
+    build:
+      context: ./apps/google_maps_parser
+      dockerfile: Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: mytravel_db
+      DB_SSLMODE: disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mytravel_network
+    restart: unless-stopped
+
+  # Instagram Parser
+  parser_instagram:
+    build:
+      context: ./apps/instagram_parser
+      dockerfile: Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: mytravel_db
+      DB_SSLMODE: disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mytravel_network
+    restart: unless-stopped
+
+  # OLX Parser
+  parser_olx:
+    build:
+      context: ./apps/olx_parser
+      dockerfile: Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: mytravel_db
+      DB_SSLMODE: disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mytravel_network
+    restart: unless-stopped
+
+  # Yandex Parser
+  parser_yandex:
+    build:
+      context: ./apps/yandex_parser
+      dockerfile: Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: mytravel_db
+      DB_SSLMODE: disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mytravel_network
+    restart: unless-stopped
+
+networks:
+  mytravel_network:
+    driver: bridge
+
+volumes:
+  postgres_data:

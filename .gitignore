@@ -1,0 +1,23 @@
+# Environment files
+.env
+
+# Logs
+*.log
+
+# Docker
+docker-compose.override.yml
+
+# Go
+*/go.sum
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
