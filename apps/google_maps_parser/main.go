@@ -1,4 +1,3 @@
-package googlemapsparser
 package main
 
 import (
@@ -8,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	_ "github.com/lib/pq"
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -20,7 +19,7 @@ func main() {
 
 	// Get database config from environment
 	dbHost := getEnv("DB_HOST", "localhost")
-	dbPort := getEnv("DB_PORT", "5433")
+	dbPort := getEnv("DB_PORT", "5434")
 	dbUser := getEnv("DB_USER", "postgres")
 	dbPassword := getEnv("DB_PASSWORD", "postgres")
 	dbName := getEnv("DB_NAME", "mytravel_db")

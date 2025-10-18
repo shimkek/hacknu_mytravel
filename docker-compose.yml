@@ -12,7 +12,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./infrastructure/database/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
-      - "5433:5432"  # Custom port to avoid conflicts
+      - "5434:5432"  # Custom port to avoid conflicts
     networks:
       - mytravel_network
     restart: unless-stopped

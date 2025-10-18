@@ -71,9 +71,15 @@ docker-compose down
 print_status "Checking if PostgreSQL is already running..."
 if docker-compose ps postgres | grep -q "Up"; then
     print_warning "PostgreSQL container is running, will restart it"
-elif netstat -tln | grep -q ":5433"; then
-    print_warning "Something is already running on port 5433"
-    print_warning "If this is your existing PostgreSQL, the deployment will use port 5433"
+elif netstat -tln | grep -q ":5434"; then
+    print_warning "Something is already running on port 5434"
+    print_warning "If this is your existing PostgreSQL, the deployment will use port 5434"
+fi
+
+print_status "Preparing Go modules..."
+if [ -f "./generate-go-sum.sh" ]; then
+    chmod +x ./generate-go-sum.sh
+    ./generate-go-sum.sh
 fi
 
 print_status "Building and starting all services..."
@@ -113,6 +119,6 @@ print_status "  Connect to database:  docker-compose exec postgres psql -U postg
 print_status "  Stop all services:    docker-compose down"
 print_status "  Restart service:      docker-compose restart parser_2gis"
 print_status ""
-print_status "Database is available on: localhost:5433"
+print_status "Database is available on: localhost:5434"
 print_status "To check parsed data: SELECT * FROM accommodations;"
 print_status "To check parser logs: SELECT * FROM parsing_logs ORDER BY started_at DESC;"

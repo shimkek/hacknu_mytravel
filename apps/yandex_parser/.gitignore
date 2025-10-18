@@ -1,0 +1,29 @@
+# Compiled binaries
+yandex_parser
+main
+parser
+
+# ChromeDriver
+chromedriver
+chromedriver.exe
+
+# Drivers directory
+drivers/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log

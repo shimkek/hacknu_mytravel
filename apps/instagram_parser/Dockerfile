@@ -3,7 +3,7 @@ FROM golang:1.21-alpine AS builder
 
 WORKDIR /app
 
-# Copy go mod files
+# Copy go mod and sum files
 COPY go.mod go.sum ./
 
 # Download dependencies
@@ -23,7 +23,7 @@ RUN apk --no-cache add ca-certificates tzdata
 WORKDIR /root/
 
 # Copy the binary from builder stage
-COPY --from=builder /app/apps/instagram_parser/main .
+COPY --from=builder /app/main .
 
 # Make sure the binary is executable
 RUN chmod +x ./main
