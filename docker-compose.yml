@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   # PostgreSQL Database (using custom port 5433 to avoid conflicts with existing PostgreSQL)
   postgres:
@@ -33,6 +35,29 @@ services:
       DB_NAME: mytravel_db
       DB_SSLMODE: disable
       TWO_GIS_API_KEY: ${TWO_GIS_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mytravel_network
+    restart: unless-stopped
+
+  # AI Analyzer Service
+  ai_analyzer:
+    build:
+      context: ./apps/ai_analyzer
+      dockerfile: Dockerfile
+    environment:
+      PORT: 8080
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: mytravel_db
+      DB_SSLMODE: disable
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    ports:
+      - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
