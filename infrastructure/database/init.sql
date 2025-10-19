@@ -2,7 +2,7 @@ create type verification_status as enum ('new', 'verified', 'in_development');
 
 alter type verification_status owner to postgres;
 
-create type source_website as enum ('2gis', 'google_maps', 'instagram', 'olx', 'yandex', 'manual');
+create type source_website as enum ('2gis', 'google_maps', 'instagram', 'olx', 'yandex', 'booking', 'manual');
 
 alter type source_website owner to postgres;
 

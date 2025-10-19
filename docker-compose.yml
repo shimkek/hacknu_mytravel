@@ -89,6 +89,24 @@ services:
       - mytravel_network
     restart: unless-stopped
 
+  # Booking Parser
+  booking_parser:
+    build: ./apps/booking_parser
+    container_name: booking_parser
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=mytravel_db
+      - DB_SSLMODE=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mytravel_network
+    restart: unless-stopped
+
   # Google Maps Parser
   # parser_google_maps:
   #   build:

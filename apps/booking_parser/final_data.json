@@ -1,0 +1,68 @@
+[
+  {
+    "property_name": "Гостиница\"Hostel\"",
+    "page_name": "dina",
+    "url": "https://www.booking.com/hotel/kz/dina.html",
+    "latitude": 49.784089781859,
+    "longitude": 73.108654671164,
+    "address": "86 улица Керамическая, 100000 Karagandy, Kazakhstan",
+    "accommodation_type": "Guest_house",
+    "description": "Гостиница\"Hostel\" — это гостевой дом, расположенный в городе Караганда. На территории имеется частная парковка. Аэропорт Сары-Арка находится в 32 км.",
+    "photos": [
+      "https://cf.bstatic.com/xdata/images/hotel/max1024x768/366125124.jpg?k=bd2c782dc2da3760e72d298b5f4991a6ade1a58768bf826ff7b44fd8a56af206",
+      "https://cf.bstatic.com/xdata/images/hotel/max1024x768/366138644.jpg?k=b5654f1b358721565f65b67d0201418112fa3e2f43bda126d3ccbaf3b31a5e4f",
+      "https://cf.bstatic.com/xdata/images/hotel/max1024x768/366153255.jpg?k=a0ae876aae7ba07dd696ab3a5bd1de4d0411264eb8c308bf6c1e74c0177e84e7",
+      "https://cf.bstatic.com/xdata/images/hotel/max1024x768/366138240.jpg?k=d988d622e275afa8830f3bfd5a99a0cc567507fba612598820cd355dd9dd84b3",
+      "https://cf.bstatic.com/xdata/images/hotel/max1024x768/366152597.jpg?k=0981f1ad790a7f3ea5d98f38c2e112740dbc3e975c026b1a88e8474f49b56767"
+    ],
+    "reviews_ratings": "7.8",
+    "reviews_count": 135,
+    "reviews": [
+      {
+        "name": "hotel_staff",
+        "score": 8.1
+      },
+      {
+        "name": "hotel_services",
+        "score": 7.8
+      },
+      {
+        "name": "hotel_clean",
+        "score": 8.4
+      },
+      {
+        "name": "hotel_comfort",
+        "score": 7.9
+      },
+      {
+        "name": "hotel_value",
+        "score": 8.4
+      },
+      {
+        "name": "hotel_location",
+        "score": 8.7
+      },
+      {
+        "name": "total",
+        "score": 7.8
+      },
+      {
+        "name": "hotel_breakfast",
+        "score": 8.3
+      },
+      {
+        "name": "hotel_paid_wifi",
+        "score": 8.5
+      }
+    ],
+    "facilities": [
+      "Private bathroom",
+      "Parking on site",
+      "Heating",
+      "Free parking",
+      "Parking"
+    ],
+    "inspection_status": "New",
+    "last_updated": "2025-10-19"
+  }
+]

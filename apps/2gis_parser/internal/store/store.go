@@ -961,3 +961,403 @@ func getEnv(key, defaultValue string) string {
 	}
 	return defaultValue
 }
+
+// InsertBookingProperty inserts a DetailedProperty from Booking.com into accommodations table
+func (ps *PostgresStore) InsertBookingProperty(property BookingProperty) error {
+	startTime := time.Now()
+
+	ps.logger.Debug("Processing booking property: %s, Address: %s", property.PropertyName, property.Address)
+
+	// Convert BookingProperty to accommodation record
+	accommodation := ps.convertBookingPropertyToAccommodation(property)
+
+	// Debug logging - log the JSON data being generated
+	ps.debugLogJSONFields(property.PageName, accommodation)
+
+	// Validate JSON data before insertion
+	if err := ps.validateJSONFields(accommodation); err != nil {
+		ps.logger.Error("Invalid JSON data for booking property %s: %v", property.PageName, err)
+		ps.logBusinessInsertion("booking", property.PageName, "insert", "failed", fmt.Sprintf("Invalid JSON data: %v", err), startTime)
+		return fmt.Errorf("invalid JSON data: %w", err)
+	}
+
+	// Check if accommodation already exists
+	existingAccommodation, err := ps.getExistingAccommodation(accommodation.SourceWebsite, accommodation.ExternalID)
+	if err != nil {
+		ps.logger.Error("Failed to check existing accommodation for booking property %s: %v", property.PageName, err)
+		ps.logBusinessInsertion("booking", property.PageName, "check", "failed", fmt.Sprintf("Failed to check existing record: %v", err), startTime)
+		return fmt.Errorf("failed to check existing accommodation: %w", err)
+	}
+
+	// If record exists, compare and skip update if no changes
+	if existingAccommodation != nil {
+		if ps.accommodationsEqual(existingAccommodation, &accommodation) {
+			ps.logger.Debug("No changes detected for accommodation: %s (PageName: %s), skipping update", property.PropertyName, property.PageName)
+			ps.logBusinessInsertion("booking", property.PageName, "skip", "success", "No changes detected", startTime)
+			return nil
+		}
+		ps.logger.Debug("Changes detected for accommodation: %s (PageName: %s), proceeding with update", property.PropertyName, property.PageName)
+	}
+
+	// Perform insert or update
+	query := `
+		INSERT INTO accommodations (
+			name, latitude, longitude, address, accommodation_type,
+			phone, email, social_media_links, website_url, social_media_page,
+			service_description, room_count, capacity, price_range_min, price_range_max,
+			photos, rating, review_count, reviews, amenities,
+			verification_status, source_website, source_url, external_id
+		) VALUES (
+			$1, $2, $3, $4, $5,
+			$6, $7, $8, $9, $10,
+			$11, $12, $13, $14, $15,
+			$16, $17, $18, $19, $20,
+			$21, $22, $23, $24
+		)
+		ON CONFLICT (source_website, external_id) 
+		DO UPDATE SET
+			name = EXCLUDED.name,
+			latitude = EXCLUDED.latitude,
+			longitude = EXCLUDED.longitude,
+			address = EXCLUDED.address,
+			accommodation_type = EXCLUDED.accommodation_type,
+			phone = EXCLUDED.phone,
+			email = EXCLUDED.email,
+			social_media_links = EXCLUDED.social_media_links,
+			website_url = EXCLUDED.website_url,
+			social_media_page = EXCLUDED.social_media_page,
+			service_description = EXCLUDED.service_description,
+			room_count = EXCLUDED.room_count,
+			capacity = EXCLUDED.capacity,
+			price_range_min = EXCLUDED.price_range_min,
+			price_range_max = EXCLUDED.price_range_max,
+			photos = EXCLUDED.photos,
+			rating = EXCLUDED.rating,
+			review_count = EXCLUDED.review_count,
+			reviews = EXCLUDED.reviews,
+			amenities = EXCLUDED.amenities,
+			verification_status = EXCLUDED.verification_status,
+			last_updated = CURRENT_TIMESTAMP
+		RETURNING (xmax = 0) AS was_insert
+	`
+
+	var wasInsert bool
+	err = ps.db.QueryRow(query,
+		accommodation.Name,
+		accommodation.Latitude,
+		accommodation.Longitude,
+		accommodation.Address,
+		accommodation.AccommodationType,
+		accommodation.Phone,
+		accommodation.Email,
+		ps.safeJSONBytes(accommodation.SocialMediaLinks),
+		accommodation.WebsiteURL,
+		accommodation.SocialMediaPage,
+		accommodation.ServiceDescription,
+		accommodation.RoomCount,
+		accommodation.Capacity,
+		accommodation.PriceRangeMin,
+		accommodation.PriceRangeMax,
+		ps.safeJSONBytes(accommodation.Photos),
+		accommodation.Rating,
+		accommodation.ReviewCount,
+		ps.safeJSONBytes(accommodation.Reviews),
+		ps.safeJSONBytes(accommodation.Amenities),
+		accommodation.VerificationStatus,
+		accommodation.SourceWebsite,
+		accommodation.SourceURL,
+		accommodation.ExternalID,
+	).Scan(&wasInsert)
+
+	if err != nil {
+		ps.logger.Error("Failed to insert/update booking property %s: %v", property.PageName, err)
+		operation := "insert" // Default to insert for error logging
+		ps.logBusinessInsertion("booking", property.PageName, operation, "failed", fmt.Sprintf("Database error: %v", err), startTime)
+		return fmt.Errorf("failed to insert/update booking property: %w", err)
+	}
+
+	operation := "update"
+	if wasInsert {
+		operation = "insert"
+	}
+
+	ps.logger.Info("Successfully %sed accommodation: %s (PageName: %s)", operation, property.PropertyName, property.PageName)
+	ps.logBusinessInsertion("booking", property.PageName, operation, "success", "", startTime)
+	return nil
+}
+
+// InsertBookingProperties inserts multiple BookingProperty entities in parallel
+func (ps *PostgresStore) InsertBookingProperties(properties []BookingProperty) error {
+	if len(properties) == 0 {
+		return nil
+	}
+
+	const maxWorkers = 3 // Reduced to be more conservative with booking.com
+	successCount := 0
+	errorCount := 0
+
+	// Create channels for work distribution
+	propertyChan := make(chan BookingProperty, len(properties))
+	resultChan := make(chan bookingInsertResult, len(properties))
+
+	// Start worker goroutines
+	for i := 0; i < maxWorkers; i++ {
+		go ps.insertBookingWorker(propertyChan, resultChan)
+	}
+
+	// Send properties to workers
+	for _, property := range properties {
+		propertyChan <- property
+	}
+	close(propertyChan)
+
+	// Collect results
+	for i := 0; i < len(properties); i++ {
+		result := <-resultChan
+		if result.err != nil {
+			errorCount++
+		} else {
+			successCount++
+		}
+	}
+
+	ps.logger.Info("Booking parallel processing completed: %d successful, %d failed out of %d total",
+		successCount, errorCount, len(properties))
+
+	return nil
+}
+
+// bookingInsertResult represents the result of a single booking property insertion
+type bookingInsertResult struct {
+	propertyPageName string
+	err              error
+}
+
+// insertBookingWorker processes booking properties from the channel
+func (ps *PostgresStore) insertBookingWorker(propertyChan <-chan BookingProperty, resultChan chan<- bookingInsertResult) {
+	for property := range propertyChan {
+		err := ps.InsertBookingProperty(property)
+		resultChan <- bookingInsertResult{
+			propertyPageName: property.PageName,
+			err:              err,
+		}
+	}
+}
+
+// convertBookingPropertyToAccommodation converts Booking.com property to accommodation record
+func (ps *PostgresStore) convertBookingPropertyToAccommodation(property BookingProperty) AccommodationRecord {
+	// Convert photos to JSON
+	photosJSON := ps.convertBookingPhotosToJSON(property.Photos)
+
+	// Convert reviews to JSON
+	reviewsJSON := ps.convertBookingReviewsToJSON(property.Reviews, property.ReviewsRatings, property.ReviewsCount)
+
+	// Convert facilities to amenities JSON
+	amenitiesJSON := ps.convertBookingFacilitiesToAmenities(property.Facilities)
+
+	// Extract rating from reviews_ratings string
+	rating := ps.parseBookingRating(property.ReviewsRatings)
+
+	// Generate website URL from page name
+	var websiteURL *string
+	if property.PageName != "" {
+		url := fmt.Sprintf("https://www.booking.com/hotel/kz/%s.html", property.PageName)
+		websiteURL = &url
+	}
+
+	return AccommodationRecord{
+		Name:               property.PropertyName,
+		Latitude:           ps.safeFloat64Pointer(property.Latitude),
+		Longitude:          ps.safeFloat64Pointer(property.Longitude),
+		Address:            ps.safeStringPointer(property.Address),
+		AccommodationType:  ps.safeStringPointer(property.AccommodationType),
+		Phone:              nil, // Not available in booking.com data
+		Email:              nil, // Not available in booking.com data
+		SocialMediaLinks:   nil, // Not available in booking.com data
+		WebsiteURL:         websiteURL,
+		SocialMediaPage:    nil, // Not available in booking.com data
+		ServiceDescription: ps.safeStringPointer(property.Description),
+		RoomCount:          nil, // Not available in booking.com data
+		Capacity:           nil, // Not available in booking.com data
+		PriceRangeMin:      nil, // Not available in current booking.com parser
+		PriceRangeMax:      nil, // Not available in current booking.com parser
+		Photos:             photosJSON,
+		Rating:             rating,
+		ReviewCount:        ps.safeIntPointer(property.ReviewsCount),
+		Reviews:            reviewsJSON,
+		Amenities:          amenitiesJSON,
+		VerificationStatus: property.InspectionStatus,
+		SourceWebsite:      "booking",
+		SourceURL:          websiteURL,
+		ExternalID:         property.PageName, // Use PageName as unique identifier
+	}
+}
+
+// Helper methods for booking.com conversion
+
+func (ps *PostgresStore) convertBookingPhotosToJSON(photos []string) []byte {
+	if len(photos) == 0 {
+		return nil
+	}
+
+	jsonData, err := json.Marshal(photos)
+	if err != nil {
+		ps.logger.Error("Failed to marshal booking photos JSON: %v", err)
+		return nil
+	}
+	return jsonData
+}
+
+func (ps *PostgresStore) convertBookingReviewsToJSON(reviews []BookingReview, ratingsStr string, count int) []byte {
+	reviewData := map[string]interface{}{
+		"general_rating":       ps.parseBookingRatingFloat(ratingsStr),
+		"general_review_count": count,
+		"detailed_reviews":     reviews,
+		"source":               "booking",
+	}
+
+	jsonData, err := json.Marshal(reviewData)
+	if err != nil {
+		ps.logger.Error("Failed to marshal booking reviews JSON: %v", err)
+		return nil
+	}
+	return jsonData
+}
+
+func (ps *PostgresStore) convertBookingFacilitiesToAmenities(facilities []string) []byte {
+	if len(facilities) == 0 {
+		return nil
+	}
+
+	amenities := make(map[string]bool)
+
+	for _, facility := range facilities {
+		cleanFacility := strings.ToLower(ps.sanitizeString(facility))
+		switch {
+		case strings.Contains(cleanFacility, "wifi") || strings.Contains(cleanFacility, "internet"):
+			amenities["wifi"] = true
+		case strings.Contains(cleanFacility, "parking"):
+			amenities["parking"] = true
+		case strings.Contains(cleanFacility, "pool") || strings.Contains(cleanFacility, "swimming"):
+			amenities["pool"] = true
+		case strings.Contains(cleanFacility, "gym") || strings.Contains(cleanFacility, "fitness"):
+			amenities["gym"] = true
+		case strings.Contains(cleanFacility, "spa") || strings.Contains(cleanFacility, "wellness"):
+			amenities["spa"] = true
+		case strings.Contains(cleanFacility, "restaurant") || strings.Contains(cleanFacility, "dining"):
+			amenities["restaurant"] = true
+		case strings.Contains(cleanFacility, "bar") || strings.Contains(cleanFacility, "lounge"):
+			amenities["bar"] = true
+		case strings.Contains(cleanFacility, "breakfast"):
+			amenities["breakfast"] = true
+		case strings.Contains(cleanFacility, "room service"):
+			amenities["room_service"] = true
+		case strings.Contains(cleanFacility, "laundry"):
+			amenities["laundry"] = true
+		case strings.Contains(cleanFacility, "air conditioning") || strings.Contains(cleanFacility, "a/c"):
+			amenities["ac"] = true
+		case strings.Contains(cleanFacility, "heating"):
+			amenities["heating"] = true
+		case strings.Contains(cleanFacility, "tv") || strings.Contains(cleanFacility, "television"):
+			amenities["tv"] = true
+		case strings.Contains(cleanFacility, "minibar"):
+			amenities["minibar"] = true
+		case strings.Contains(cleanFacility, "safe"):
+			amenities["safe"] = true
+		case strings.Contains(cleanFacility, "balcony") || strings.Contains(cleanFacility, "terrace"):
+			amenities["balcony"] = true
+		case strings.Contains(cleanFacility, "kitchen") || strings.Contains(cleanFacility, "kitchenette"):
+			amenities["kitchen"] = true
+		case strings.Contains(cleanFacility, "pet") || strings.Contains(cleanFacility, "animal"):
+			amenities["pets_allowed"] = true
+		case strings.Contains(cleanFacility, "wheelchair") || strings.Contains(cleanFacility, "accessible"):
+			amenities["disabled_access"] = true
+		default:
+			// Add unmapped facilities as custom amenities (limit to avoid too many)
+			if len(amenities) < 15 {
+				key := strings.ReplaceAll(cleanFacility, " ", "_")
+				key = strings.ReplaceAll(key, "-", "_")
+				amenities[key] = true
+			}
+		}
+	}
+
+	if len(amenities) == 0 {
+		return nil
+	}
+
+	jsonData, err := json.Marshal(amenities)
+	if err != nil {
+		ps.logger.Error("Failed to marshal booking amenities JSON: %v", err)
+		return nil
+	}
+	return jsonData
+}
+
+func (ps *PostgresStore) parseBookingRating(ratingsStr string) *float64 {
+	if ratingsStr == "" {
+		return nil
+	}
+
+	var rating float64
+	if _, err := fmt.Sscanf(ratingsStr, "%f", &rating); err == nil {
+		// Ensure rating is within valid range
+		if rating >= 0 && rating <= 10 {
+			return &rating
+		}
+	}
+	return nil
+}
+
+func (ps *PostgresStore) parseBookingRatingFloat(ratingsStr string) float64 {
+	if rating := ps.parseBookingRating(ratingsStr); rating != nil {
+		return *rating
+	}
+	return 0.0
+}
+
+func (ps *PostgresStore) safeFloat64Pointer(f float64) *float64 {
+	if f == 0 {
+		return nil
+	}
+	return &f
+}
+
+func (ps *PostgresStore) safeStringPointer(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func (ps *PostgresStore) safeIntPointer(i int) *int {
+	if i == 0 {
+		return nil
+	}
+	return &i
+}
+
+// BookingProperty represents the structure from booking parser
+type BookingProperty struct {
+	PropertyName      string          `json:"property_name"`
+	PageName          string          `json:"page_name"`
+	URL               string          `json:"url"`
+	Latitude          float64         `json:"latitude"`
+	Longitude         float64         `json:"longitude"`
+	Address           string          `json:"address"`
+	AccommodationType string          `json:"accommodation_type"`
+	Description       string          `json:"description"`
+	Photos            []string        `json:"photos"`
+	ReviewsRatings    string          `json:"reviews_ratings"`
+	ReviewsCount      int             `json:"reviews_count"`
+	Reviews           []BookingReview `json:"reviews"`
+	Facilities        []string        `json:"facilities"`
+	InspectionStatus  string          `json:"inspection_status"`
+	LastUpdated       string          `json:"last_updated"`
+}
+
+// BookingReview represents individual review from booking
+type BookingReview struct {
+	Name  string  `json:"name"`
+	Score float64 `json:"score"`
+}

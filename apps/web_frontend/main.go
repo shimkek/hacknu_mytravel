@@ -167,6 +167,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
                     <select class="form-select" id="sourceFilter">
                         <option value="">All Sources</option>
                         <option value="2gis">2GIS</option>
+                        <option value="booking">Booking.com</option>
                         <option value="google_maps">Google Maps</option>
                         <option value="instagram">Instagram</option>
                         <option value="olx">OLX</option>
@@ -457,6 +458,14 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
         }
 
         function generateStars(rating) {
+            // Validate rating value to prevent errors
+            if (!rating || isNaN(rating) || !isFinite(rating) || rating < 0) {
+                return '☆☆☆☆☆'; // Return 5 empty stars for invalid ratings
+            }
+            
+            // Ensure rating doesn't exceed 5
+            rating = Math.min(rating, 5);
+            
             const fullStars = Math.floor(rating);
             const hasHalfStar = rating % 1 >= 0.5;
             const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
