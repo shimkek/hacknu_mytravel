@@ -65,6 +65,30 @@ services:
       - mytravel_network
     restart: unless-stopped
 
+  # Web Frontend
+  web_frontend:
+    build:
+      context: ./apps/web_frontend
+      dockerfile: Dockerfile
+    environment:
+      AI_ANALYZER_URL: http://ai_analyzer:8080
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: mytravel_db
+      DB_SSLMODE: disable
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ai_analyzer:
+        condition: service_started
+    networks:
+      - mytravel_network
+    restart: unless-stopped
+
   # Google Maps Parser
   # parser_google_maps:
   #   build:
