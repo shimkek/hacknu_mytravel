@@ -92,6 +92,25 @@ func (ps *PostgresStore) InsertBusinessDetail(business domain.BusinessDetail) er
 		return fmt.Errorf("invalid JSON data: %w", err)
 	}
 
+	// Check if accommodation already exists
+	existingAccommodation, err := ps.getExistingAccommodation(accommodation.SourceWebsite, accommodation.ExternalID)
+	if err != nil {
+		ps.logger.Error("Failed to check existing accommodation for business %s: %v", business.ID, err)
+		ps.logBusinessInsertion("2gis", business.ID, "check", "failed", fmt.Sprintf("Failed to check existing record: %v", err), startTime)
+		return fmt.Errorf("failed to check existing accommodation: %w", err)
+	}
+
+	// If record exists, compare and skip update if no changes
+	if existingAccommodation != nil {
+		if ps.accommodationsEqual(existingAccommodation, &accommodation) {
+			ps.logger.Debug("No changes detected for accommodation: %s (ID: %s), skipping update", business.Name, business.ID)
+			ps.logBusinessInsertion("2gis", business.ID, "skip", "success", "No changes detected", startTime)
+			return nil
+		}
+		ps.logger.Debug("Changes detected for accommodation: %s (ID: %s), proceeding with update", business.Name, business.ID)
+	}
+
+	// Perform insert or update
 	query := `
 		INSERT INTO accommodations (
 			name, latitude, longitude, address, accommodation_type,
@@ -134,7 +153,7 @@ func (ps *PostgresStore) InsertBusinessDetail(business domain.BusinessDetail) er
 	`
 
 	var wasInsert bool
-	err := ps.db.QueryRow(query,
+	err = ps.db.QueryRow(query,
 		accommodation.Name,
 		accommodation.Latitude,
 		accommodation.Longitude,
@@ -743,6 +762,197 @@ type AccommodationRecord struct {
 	SourceWebsite      string
 	SourceURL          *string
 	ExternalID         string
+}
+
+// getExistingAccommodation retrieves existing accommodation data from database
+func (ps *PostgresStore) getExistingAccommodation(sourceWebsite, externalID string) (*AccommodationRecord, error) {
+	query := `
+		SELECT 
+			name, latitude, longitude, address, accommodation_type,
+			phone, email, social_media_links, website_url, social_media_page,
+			service_description, room_count, capacity, price_range_min, price_range_max,
+			photos, rating, review_count, reviews, amenities,
+			verification_status, source_website, source_url, external_id
+		FROM accommodations 
+		WHERE source_website = $1 AND external_id = $2
+	`
+
+	var record AccommodationRecord
+	var socialMediaLinks, photos, reviews, amenities sql.NullString
+
+	err := ps.db.QueryRow(query, sourceWebsite, externalID).Scan(
+		&record.Name,
+		&record.Latitude,
+		&record.Longitude,
+		&record.Address,
+		&record.AccommodationType,
+		&record.Phone,
+		&record.Email,
+		&socialMediaLinks,
+		&record.WebsiteURL,
+		&record.SocialMediaPage,
+		&record.ServiceDescription,
+		&record.RoomCount,
+		&record.Capacity,
+		&record.PriceRangeMin,
+		&record.PriceRangeMax,
+		&photos,
+		&record.Rating,
+		&record.ReviewCount,
+		&reviews,
+		&amenities,
+		&record.VerificationStatus,
+		&record.SourceWebsite,
+		&record.SourceURL,
+		&record.ExternalID,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // No existing record found
+		}
+		return nil, fmt.Errorf("failed to retrieve existing accommodation: %w", err)
+	}
+
+	// Convert nullable strings to byte arrays
+	if socialMediaLinks.Valid {
+		record.SocialMediaLinks = []byte(socialMediaLinks.String)
+	}
+	if photos.Valid {
+		record.Photos = []byte(photos.String)
+	}
+	if reviews.Valid {
+		record.Reviews = []byte(reviews.String)
+	}
+	if amenities.Valid {
+		record.Amenities = []byte(amenities.String)
+	}
+
+	return &record, nil
+}
+
+// accommodationsEqual compares two accommodation records to check if they're different
+func (ps *PostgresStore) accommodationsEqual(existing, new *AccommodationRecord) bool {
+	// Compare basic fields
+	if existing.Name != new.Name {
+		return false
+	}
+
+	// Compare nullable float64 fields
+	if !ps.floatPtrsEqual(existing.Latitude, new.Latitude) ||
+		!ps.floatPtrsEqual(existing.Longitude, new.Longitude) ||
+		!ps.floatPtrsEqual(existing.Rating, new.Rating) ||
+		!ps.floatPtrsEqual(existing.PriceRangeMin, new.PriceRangeMin) ||
+		!ps.floatPtrsEqual(existing.PriceRangeMax, new.PriceRangeMax) {
+		return false
+	}
+
+	// Compare nullable string fields
+	if !ps.stringPtrsEqual(existing.Address, new.Address) ||
+		!ps.stringPtrsEqual(existing.AccommodationType, new.AccommodationType) ||
+		!ps.stringPtrsEqual(existing.Phone, new.Phone) ||
+		!ps.stringPtrsEqual(existing.Email, new.Email) ||
+		!ps.stringPtrsEqual(existing.WebsiteURL, new.WebsiteURL) ||
+		!ps.stringPtrsEqual(existing.SocialMediaPage, new.SocialMediaPage) ||
+		!ps.stringPtrsEqual(existing.ServiceDescription, new.ServiceDescription) ||
+		!ps.stringPtrsEqual(existing.SourceURL, new.SourceURL) {
+		return false
+	}
+
+	// Compare nullable int fields
+	if !ps.intPtrsEqual(existing.RoomCount, new.RoomCount) ||
+		!ps.intPtrsEqual(existing.Capacity, new.Capacity) ||
+		!ps.intPtrsEqual(existing.ReviewCount, new.ReviewCount) {
+		return false
+	}
+
+	// Compare JSON byte fields
+	if !ps.jsonBytesEqual(existing.SocialMediaLinks, new.SocialMediaLinks) ||
+		!ps.jsonBytesEqual(existing.Photos, new.Photos) ||
+		!ps.jsonBytesEqual(existing.Reviews, new.Reviews) ||
+		!ps.jsonBytesEqual(existing.Amenities, new.Amenities) {
+		return false
+	}
+
+	// Compare verification status (should typically be the same)
+	if existing.VerificationStatus != new.VerificationStatus {
+		return false
+	}
+
+	return true
+}
+
+// Helper methods for comparing nullable fields
+func (ps *PostgresStore) floatPtrsEqual(a, b *float64) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	// Use a small epsilon for float comparison
+	const epsilon = 1e-9
+	return abs(*a-*b) < epsilon
+}
+
+func abs(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+func (ps *PostgresStore) stringPtrsEqual(a, b *string) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+func (ps *PostgresStore) intPtrsEqual(a, b *int) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+func (ps *PostgresStore) jsonBytesEqual(a, b []byte) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+
+	// Parse both JSON objects and compare
+	var objA, objB interface{}
+
+	if err := json.Unmarshal(a, &objA); err != nil {
+		ps.logger.Error("Failed to unmarshal JSON A for comparison: %v", err)
+		return false
+	}
+
+	if err := json.Unmarshal(b, &objB); err != nil {
+		ps.logger.Error("Failed to unmarshal JSON B for comparison: %v", err)
+		return false
+	}
+
+	// Convert back to JSON with consistent formatting for comparison
+	jsonA, errA := json.Marshal(objA)
+	jsonB, errB := json.Marshal(objB)
+
+	if errA != nil || errB != nil {
+		ps.logger.Error("Failed to re-marshal JSON for comparison")
+		return false
+	}
+
+	return string(jsonA) == string(jsonB)
 }
 
 func getEnv(key, defaultValue string) string {

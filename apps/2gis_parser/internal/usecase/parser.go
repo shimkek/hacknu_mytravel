@@ -58,7 +58,7 @@ func (p *Parser) Run() error {
 	// 	p.logger.Error("Failed to load rubrics: %v", err)
 	// 	return fmt.Errorf("failed to load rubrics: %w", err)
 	// }
-	rubrics := []string{"70348"}
+	rubrics := []string{"70348", "547", "23469", "214", "110305", "110329"}
 
 	p.logger.Info("Loaded %d tourism rubrics from CSV", len(rubrics))
 

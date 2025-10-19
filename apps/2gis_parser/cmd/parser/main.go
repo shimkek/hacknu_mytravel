@@ -79,7 +79,7 @@ func main() {
 			l.Fatal("failed to run parser: %v", err)
 		}
 		l.Info("Parser run completed, sleeping for 10 minutes before next run")
-		time.Sleep(10 * time.Minute)
+		time.Sleep(60 * time.Minute)
 	}
 }
 
